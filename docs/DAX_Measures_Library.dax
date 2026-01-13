@@ -1,0 +1,689 @@
+// ============================================================================
+// NYC TAXI ANALYTICS - COMPLETE DAX MEASURES LIBRARY
+// Microsoft Fabric Data Engineering Project
+// ============================================================================
+// Copy these measures into Power BI Desktop after connecting to the Lakehouse
+// ============================================================================
+
+// ===========================================================================
+// SECTION 1: BASIC COUNT & SUM METRICS
+// ===========================================================================
+
+// Total number of taxi trips
+Total Trips = 
+COUNTROWS(gold_fact_trips)
+
+// Total revenue from all trips
+Total Revenue = 
+SUM(gold_fact_trips[total_amount])
+
+// Total base fare amount
+Total Fare = 
+SUM(gold_fact_trips[fare_amount])
+
+// Total tips collected
+Total Tips = 
+SUM(gold_fact_trips[tip_amount])
+
+// Total passengers transported
+Total Passengers = 
+SUM(gold_fact_trips[passenger_count])
+
+// Total distance traveled (miles)
+Total Distance = 
+SUM(gold_fact_trips[trip_distance_miles])
+
+// Total trip duration (hours)
+Total Duration Hours = 
+DIVIDE(SUM(gold_fact_trips[trip_duration_minutes]), 60, 0)
+
+// ===========================================================================
+// SECTION 2: AVERAGE METRICS
+// ===========================================================================
+
+// Average fare per trip
+Avg Fare = 
+AVERAGE(gold_fact_trips[fare_amount])
+
+// Average trip distance (miles)
+Avg Distance = 
+AVERAGE(gold_fact_trips[trip_distance_miles])
+
+// Average trip duration (minutes)
+Avg Duration = 
+AVERAGE(gold_fact_trips[trip_duration_minutes])
+
+// Average tip percentage
+Avg Tip % = 
+AVERAGE(gold_fact_trips[tip_percentage])
+
+// Average speed during trips (MPH)
+Avg Speed = 
+AVERAGE(gold_fact_trips[avg_speed_mph])
+
+// Average total revenue per trip
+Avg Revenue per Trip = 
+DIVIDE([Total Revenue], [Total Trips], 0)
+
+// Revenue earned per mile driven
+Revenue per Mile = 
+DIVIDE([Total Revenue], [Total Distance], 0)
+
+// Average passengers per trip
+Avg Passengers = 
+AVERAGE(gold_fact_trips[passenger_count])
+
+// ===========================================================================
+// SECTION 3: TIME INTELLIGENCE MEASURES
+// ===========================================================================
+
+// Year-to-date revenue
+Revenue YTD = 
+TOTALYTD([Total Revenue], gold_dim_date[full_date])
+
+// Year-to-date trips
+Trips YTD = 
+TOTALYTD([Total Trips], gold_dim_date[full_date])
+
+// Previous year revenue (same period)
+Revenue PY = 
+CALCULATE(
+    [Total Revenue],
+    SAMEPERIODLASTYEAR(gold_dim_date[full_date])
+)
+
+// Previous year trips
+Trips PY = 
+CALCULATE(
+    [Total Trips],
+    SAMEPERIODLASTYEAR(gold_dim_date[full_date])
+)
+
+// Revenue growth Year-over-Year (percentage)
+Revenue Growth YoY % = 
+VAR CurrentRevenue = [Total Revenue]
+VAR PreviousRevenue = [Revenue PY]
+RETURN
+DIVIDE(CurrentRevenue - PreviousRevenue, PreviousRevenue, 0)
+
+// Trips growth Year-over-Year (percentage)
+Trips Growth YoY % = 
+VAR CurrentTrips = [Total Trips]
+VAR PreviousTrips = [Trips PY]
+RETURN
+DIVIDE(CurrentTrips - PreviousTrips, PreviousTrips, 0)
+
+// Previous month revenue
+Revenue PM = 
+CALCULATE(
+    [Total Revenue],
+    PREVIOUSMONTH(gold_dim_date[full_date])
+)
+
+// Previous month trips
+Trips PM = 
+CALCULATE(
+    [Total Trips],
+    PREVIOUSMONTH(gold_dim_date[full_date])
+)
+
+// Revenue growth Month-over-Month (percentage)
+Revenue Growth MoM % = 
+VAR CurrentRev = [Total Revenue]
+VAR PreviousRev = [Revenue PM]
+RETURN
+DIVIDE(CurrentRev - PreviousRev, PreviousRev, 0)
+
+// Trips growth Month-over-Month (percentage)
+Trips Growth MoM % = 
+VAR CurrentTrips = [Total Trips]
+VAR PreviousTrips = [Trips PM]
+RETURN
+DIVIDE(CurrentTrips - PreviousTrips, PreviousTrips, 0)
+
+// Running total of revenue over time
+Running Revenue = 
+CALCULATE(
+    [Total Revenue],
+    FILTER(
+        ALLSELECTED(gold_dim_date[full_date]),
+        gold_dim_date[full_date] <= MAX(gold_dim_date[full_date])
+    )
+)
+
+// Running total of trips over time
+Running Trips = 
+CALCULATE(
+    [Total Trips],
+    FILTER(
+        ALLSELECTED(gold_dim_date[full_date]),
+        gold_dim_date[full_date] <= MAX(gold_dim_date[full_date])
+    )
+)
+
+// Average daily trips
+Daily Avg Trips = 
+DIVIDE(
+    [Total Trips],
+    DISTINCTCOUNT(gold_dim_date[full_date]),
+    0
+)
+
+// Average daily revenue
+Daily Avg Revenue = 
+DIVIDE(
+    [Total Revenue],
+    DISTINCTCOUNT(gold_dim_date[full_date]),
+    0
+)
+
+// ===========================================================================
+// SECTION 4: LOCATION-BASED METRICS
+// ===========================================================================
+
+// Percentage of trips originating from airports
+Airport Pickup % = 
+VAR AirportPickups = 
+    CALCULATE(
+        [Total Trips],
+        RELATEDTABLE(gold_dim_location),
+        gold_dim_location[is_airport] = TRUE()
+    )
+RETURN
+DIVIDE(AirportPickups, [Total Trips], 0)
+
+// Percentage of trips going to airports
+Airport Dropoff % = 
+VAR AirportDropoffs = 
+    CALCULATE(
+        [Total Trips],
+        gold_dim_location[is_airport] = TRUE()
+    )
+RETURN
+DIVIDE(AirportDropoffs, [Total Trips], 0)
+
+// Percentage of trips in Manhattan (pickup)
+Manhattan Pickup % = 
+VAR ManhattanTrips = 
+    CALCULATE(
+        [Total Trips],
+        RELATEDTABLE(gold_dim_location),
+        gold_dim_location[borough] = "Manhattan"
+    )
+RETURN
+DIVIDE(ManhattanTrips, [Total Trips], 0)
+
+// Revenue from Manhattan pickups
+Manhattan Revenue = 
+CALCULATE(
+    [Total Revenue],
+    RELATEDTABLE(gold_dim_location),
+    gold_dim_location[borough] = "Manhattan"
+)
+
+// Count of unique pickup zones used
+Unique Pickup Zones = 
+DISTINCTCOUNT(gold_fact_trips[pickup_location_sk])
+
+// Count of unique dropoff zones
+Unique Dropoff Zones = 
+DISTINCTCOUNT(gold_fact_trips[dropoff_location_sk])
+
+// ===========================================================================
+// SECTION 5: TIME OF DAY METRICS
+// ===========================================================================
+
+// Total rush hour trips
+Rush Hour Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_fact_trips[is_rush_hour] = TRUE()
+)
+
+// Percentage of trips during rush hour
+Rush Hour % = 
+DIVIDE([Rush Hour Trips], [Total Trips], 0)
+
+// Rush hour revenue
+Rush Hour Revenue = 
+CALCULATE(
+    [Total Revenue],
+    gold_fact_trips[is_rush_hour] = TRUE()
+)
+
+// Weekend trips count
+Weekend Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_fact_trips[is_weekend] = TRUE()
+)
+
+// Percentage of weekend trips
+Weekend % = 
+DIVIDE([Weekend Trips], [Total Trips], 0)
+
+// Weekend revenue
+Weekend Revenue = 
+CALCULATE(
+    [Total Revenue],
+    gold_fact_trips[is_weekend] = TRUE()
+)
+
+// Weekday trips
+Weekday Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_fact_trips[is_weekend] = FALSE()
+)
+
+// Night trips (10PM - 6AM)
+Night Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_time[time_of_day] = "Night"
+)
+
+// Morning trips (6AM - 12PM)
+Morning Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_time[time_of_day] = "Morning"
+)
+
+// Afternoon trips (12PM - 5PM)
+Afternoon Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_time[time_of_day] = "Afternoon"
+)
+
+// Evening trips (5PM - 10PM)
+Evening Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_time[time_of_day] = "Evening"
+)
+
+// Peak period revenue
+Peak Period Revenue = 
+CALCULATE(
+    [Total Revenue],
+    gold_dim_time[peak_period] = "Peak"
+)
+
+// ===========================================================================
+// SECTION 6: WEATHER IMPACT METRICS
+// ===========================================================================
+
+// Average trips on rainy days
+Rainy Day Avg Trips = 
+CALCULATE(
+    AVERAGEX(
+        VALUES(gold_dim_date[full_date]),
+        [Total Trips]
+    ),
+    gold_dim_weather[weather_condition] IN {"Heavy Rain", "Light Rain"}
+)
+
+// Average trips on normal weather days
+Normal Weather Avg Trips = 
+CALCULATE(
+    AVERAGEX(
+        VALUES(gold_dim_date[full_date]),
+        [Total Trips]
+    ),
+    gold_dim_weather[weather_condition] = "Normal"
+)
+
+// Weather impact factor (rainy vs normal)
+Weather Impact Factor = 
+DIVIDE([Rainy Day Avg Trips], [Normal Weather Avg Trips], 1)
+
+// Trips during severe weather
+Severe Weather Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_weather[is_severe_weather] = TRUE()
+)
+
+// Revenue during severe weather
+Severe Weather Revenue = 
+CALCULATE(
+    [Total Revenue],
+    gold_dim_weather[is_severe_weather] = TRUE()
+)
+
+// Snow day trips
+Snow Day Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_weather[weather_condition] = "Snow"
+)
+
+// Hot day trips (temp > 85°F)
+Hot Day Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_weather[temp_category] = "Hot"
+)
+
+// Cold day trips (temp < 32°F)
+Cold Day Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_weather[temp_category] = "Freezing"
+)
+
+// ===========================================================================
+// SECTION 7: PAYMENT ANALYSIS METRICS
+// ===========================================================================
+
+// Credit card trips
+Credit Card Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_payment_type[payment_type_name] = "Credit Card"
+)
+
+// Credit card percentage
+Credit Card % = 
+DIVIDE([Credit Card Trips], [Total Trips], 0)
+
+// Cash trips
+Cash Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_payment_type[payment_type_name] = "Cash"
+)
+
+// Cash percentage
+Cash % = 
+DIVIDE([Cash Trips], [Total Trips], 0)
+
+// Credit card revenue
+Credit Card Revenue = 
+CALCULATE(
+    [Total Revenue],
+    gold_dim_payment_type[payment_type_name] = "Credit Card"
+)
+
+// Cash revenue
+Cash Revenue = 
+CALCULATE(
+    [Total Revenue],
+    gold_dim_payment_type[payment_type_name] = "Cash"
+)
+
+// Average tip for credit card payments
+CC Avg Tip % = 
+CALCULATE(
+    AVERAGE(gold_fact_trips[tip_percentage]),
+    gold_dim_payment_type[payment_type_name] = "Credit Card"
+)
+
+// Total tips from credit cards
+CC Total Tips = 
+CALCULATE(
+    [Total Tips],
+    gold_dim_payment_type[payment_type_name] = "Credit Card"
+)
+
+// ===========================================================================
+// SECTION 8: VENDOR METRICS
+// ===========================================================================
+
+// CMT trips
+CMT Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_vendor[vendor_name] = "Creative Mobile Technologies"
+)
+
+// CMT market share
+CMT Market Share = 
+DIVIDE([CMT Trips], [Total Trips], 0)
+
+// VeriFone trips
+VeriFone Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_vendor[vendor_name] = "VeriFone Inc"
+)
+
+// VeriFone market share
+VeriFone Market Share = 
+DIVIDE([VeriFone Trips], [Total Trips], 0)
+
+// CMT revenue
+CMT Revenue = 
+CALCULATE(
+    [Total Revenue],
+    gold_dim_vendor[vendor_name] = "Creative Mobile Technologies"
+)
+
+// VeriFone revenue
+VeriFone Revenue = 
+CALCULATE(
+    [Total Revenue],
+    gold_dim_vendor[vendor_name] = "VeriFone Inc"
+)
+
+// ===========================================================================
+// SECTION 9: DISTANCE CATEGORY METRICS
+// ===========================================================================
+
+// Short trips (< 1 mile)
+Short Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_fact_trips[distance_category] = "Short (<1 mile)"
+)
+
+// Short trips percentage
+Short Trips % = 
+DIVIDE([Short Trips], [Total Trips], 0)
+
+// Medium trips (1-3 miles)
+Medium Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_fact_trips[distance_category] = "Medium (1-3 miles)"
+)
+
+// Medium trips percentage
+Medium Trips % = 
+DIVIDE([Medium Trips], [Total Trips], 0)
+
+// Long trips (3-10 miles)
+Long Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_fact_trips[distance_category] = "Long (3-10 miles)"
+)
+
+// Long trips percentage
+Long Trips % = 
+DIVIDE([Long Trips], [Total Trips], 0)
+
+// Very long trips (> 10 miles)
+Very Long Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_fact_trips[distance_category] = "Very Long (>10 miles)"
+)
+
+// Very long trips percentage
+Very Long Trips % = 
+DIVIDE([Very Long Trips], [Total Trips], 0)
+
+// Average fare for short trips
+Avg Fare Short = 
+CALCULATE(
+    [Avg Fare],
+    gold_fact_trips[distance_category] = "Short (<1 mile)"
+)
+
+// Average fare for long trips
+Avg Fare Long = 
+CALCULATE(
+    [Avg Fare],
+    gold_fact_trips[distance_category] = "Long (3-10 miles)"
+)
+
+// ===========================================================================
+// SECTION 10: HOLIDAY METRICS
+// ===========================================================================
+
+// Holiday trips
+Holiday Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_date[is_holiday] = TRUE()
+)
+
+// Holiday revenue
+Holiday Revenue = 
+CALCULATE(
+    [Total Revenue],
+    gold_dim_date[is_holiday] = TRUE()
+)
+
+// Average holiday trips per day
+Holiday Daily Avg = 
+DIVIDE(
+    [Holiday Trips],
+    CALCULATE(
+        DISTINCTCOUNT(gold_dim_date[full_date]),
+        gold_dim_date[is_holiday] = TRUE()
+    ),
+    0
+)
+
+// Major holiday trips
+Major Holiday Trips = 
+CALCULATE(
+    [Total Trips],
+    gold_dim_date[is_major_holiday] = TRUE()
+)
+
+// ===========================================================================
+// SECTION 11: KPI & TARGET MEASURES
+// ===========================================================================
+
+// Revenue target (example: 5% growth over last year)
+Revenue Target = 
+[Revenue PY] * 1.05
+
+// Revenue vs target percentage
+Revenue vs Target % = 
+DIVIDE([Total Revenue], [Revenue Target], 0) - 1
+
+// Revenue KPI status indicator
+Revenue KPI Status = 
+SWITCH(
+    TRUE(),
+    [Revenue vs Target %] >= 0.05, "🟢 Above Target",
+    [Revenue vs Target %] >= 0, "🟡 On Track",
+    [Revenue vs Target %] >= -0.05, "🟠 Below Target",
+    "🔴 Critical"
+)
+
+// Daily trips target
+Daily Trips Target = 500000
+
+// Trips vs daily target
+Trips vs Target = 
+[Daily Avg Trips] - [Daily Trips Target]
+
+// Trips KPI status
+Trips KPI Status = 
+IF(
+    [Trips vs Target] >= 0,
+    "🟢 Meeting Target",
+    "🔴 Below Target"
+)
+
+// ===========================================================================
+// SECTION 12: ADVANCED ANALYTICS
+// ===========================================================================
+
+// High tip rate (trips with >= 20% tip)
+High Tip Rate = 
+VAR HighTipTrips = 
+    CALCULATE(
+        [Total Trips],
+        gold_fact_trips[tip_percentage] >= 20
+    )
+RETURN
+DIVIDE(HighTipTrips, [Total Trips], 0)
+
+// Low/No tip rate
+Low Tip Rate = 
+VAR LowTipTrips = 
+    CALCULATE(
+        [Total Trips],
+        gold_fact_trips[tip_percentage] < 10
+    )
+RETURN
+DIVIDE(LowTipTrips, [Total Trips], 0)
+
+// Driver efficiency (revenue per hour)
+Driver Efficiency = 
+DIVIDE(
+    [Total Revenue],
+    [Total Duration Hours],
+    0
+)
+
+// Trip frequency (trips per day per zone)
+Trip Frequency = 
+DIVIDE(
+    [Total Trips],
+    DISTINCTCOUNT(gold_dim_date[full_date]) * DISTINCTCOUNT(gold_dim_location[location_sk]),
+    0
+)
+
+// Revenue concentration (top 10 zones)
+Top 10 Zone Revenue = 
+CALCULATE(
+    [Total Revenue],
+    TOPN(10, VALUES(gold_dim_location[zone_name]), [Total Revenue], DESC)
+)
+
+// Top 10 zone revenue percentage
+Top 10 Zone % = 
+DIVIDE([Top 10 Zone Revenue], [Total Revenue], 0)
+
+// ===========================================================================
+// SECTION 13: FORMATTED DISPLAY MEASURES
+// ===========================================================================
+
+// Revenue formatted
+Revenue Display = 
+FORMAT([Total Revenue], "$#,##0")
+
+// Revenue in millions
+Revenue (M) = 
+FORMAT([Total Revenue] / 1000000, "$#,##0.0M")
+
+// Trips in thousands
+Trips (K) = 
+FORMAT([Total Trips] / 1000, "#,##0K")
+
+// Percentage formatter
+Pct Format = 
+FORMAT([Rush Hour %], "0.0%")
+
+// Growth indicator with arrow
+Revenue Growth Indicator = 
+VAR Growth = [Revenue Growth YoY %]
+RETURN
+IF(
+    Growth >= 0,
+    "▲ " & FORMAT(Growth, "0.0%"),
+    "▼ " & FORMAT(Growth, "0.0%")
+)
+
+// ===========================================================================
+// END OF DAX MEASURES LIBRARY
+// ===========================================================================
